@@ -18,6 +18,17 @@ export const api = {
     return response.json();
   },
 
+  async debugRetrieve(documentId, question, { topK = 6 } = {}) {
+    const url = new URL(`${API_BASE}/debug/retrieve`);
+    url.searchParams.set("document_id", documentId);
+    url.searchParams.set("q", question);
+    url.searchParams.set("top_k", String(topK));
+
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error("Debug retrieve failed");
+    return response.json();
+  },
+
   async uploadDocument(file) {
     const formData = new FormData();
     formData.append("file", file);

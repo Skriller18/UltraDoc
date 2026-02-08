@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { UploadZone } from './components/UploadZone';
 import { Message, LoadingMessage } from './components/Message';
 import { ExtractPanel } from './components/ExtractPanel';
+import { DebugRetrievalPanel } from './components/DebugRetrievalPanel';
 import { PDFViewer } from './components/PDFViewer';
 import { useSessions } from './hooks/useSessions';
 import { api } from './utils/api';
@@ -27,6 +28,11 @@ function App() {
   const [extractData, setExtractData] = useState(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [showPDF, setShowPDF] = useState(true);
+
+  const debugMode = new URLSearchParams(window.location.search).has('debug');
+  const [debugData, setDebugData] = useState(null);
+  const [isDebugLoading, setIsDebugLoading] = useState(false);
+  const [lastQuestion, setLastQuestion] = useState('');
 
   const messagesEndRef = useRef(null);
 
@@ -60,6 +66,7 @@ function App() {
     if (!inputValue.trim() || !activeSession) return;
 
     const question = inputValue.trim();
+    setLastQuestion(question);
     setInputValue('');
 
     // Add user message
@@ -73,7 +80,7 @@ function App() {
 
     try {
       const response = await api.askQuestion(activeSession.documentId, question);
-      
+
       addMessage(activeSessionId, {
         id: `msg_${Date.now()}`,
         role: 'assistant',
@@ -83,6 +90,18 @@ function App() {
         sources: response.sources,
         guardrail: response.guardrail,
       });
+
+      if (debugMode) {
+        setIsDebugLoading(true);
+        try {
+          const dbg = await api.debugRetrieve(activeSession.documentId, question, { topK: 6 });
+          setDebugData(dbg);
+        } catch (e) {
+          console.error('Debug retrieve failed:', e);
+        } finally {
+          setIsDebugLoading(false);
+        }
+      }
     } catch (error) {
       console.error('Ask failed:', error);
       addMessage(activeSessionId, {
@@ -211,7 +230,26 @@ function App() {
             </div>
 
             {activeSession && !showUpload && (
-              <div className="input-container">
+              <>
+                {debugMode && (
+                  <DebugRetrievalPanel
+                    data={debugData}
+                    isLoading={isDebugLoading}
+                    onRefresh={async () => {
+                      if (!activeSession || !lastQuestion) return;
+                      setIsDebugLoading(true);
+                      try {
+                        const dbg = await api.debugRetrieve(activeSession.documentId, lastQuestion, { topK: 6 });
+                        setDebugData(dbg);
+                      } catch (e) {
+                        console.error('Debug retrieve failed:', e);
+                      } finally {
+                        setIsDebugLoading(false);
+                      }
+                    }}
+                  />
+                )}
+                <div className="input-container">
                 <div className="input-wrapper">
                   <input
                     type="text"
@@ -233,6 +271,7 @@ function App() {
                   </div>
                 </div>
               </div>
+              </>
             )}
           </div>
         </div>
