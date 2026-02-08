@@ -20,7 +20,7 @@ def _ensure_dirs():
     os.makedirs(os.path.join(settings.storage_dir, "docs"), exist_ok=True)
 
 
-def ingest_document(*, file_path: str, filename: str, mime: str | None) -> dict:
+async def ingest_document(*, file_path: str, filename: str, mime: str | None) -> dict:
     _ensure_dirs()
 
     document_id = str(uuid.uuid4())
@@ -30,7 +30,7 @@ def ingest_document(*, file_path: str, filename: str, mime: str | None) -> dict:
     original_path = os.path.join(doc_dir, filename)
     shutil.copyfile(file_path, original_path)
 
-    pages = extract_text(original_path, mime or "")
+    pages = await extract_text(original_path, mime or "")
 
     # Global metadata detection (POC heuristics)
     full_text = "\n\n".join([(t or "") for _, t in pages])

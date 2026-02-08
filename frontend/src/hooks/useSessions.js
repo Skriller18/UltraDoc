@@ -1,47 +1,53 @@
 import { useState, useEffect } from "react";
-
-const STORAGE_KEY = "ultradoc_sessions";
-
-// Helper to load sessions from localStorage
-function loadStoredSessions() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error("Failed to parse sessions:", e);
-    }
-  }
-  return [];
-}
+import { api } from "../utils/api";
 
 export function useSessions() {
-  // Use lazy initialization - the function is only called once on mount
-  const [sessions, setSessions] = useState(() => loadStoredSessions());
-  const [activeSessionId, setActiveSessionId] = useState(() => {
-    const stored = loadStoredSessions();
-    return stored.length > 0 ? stored[0].id : null;
-  });
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
 
-  // Save sessions to localStorage whenever they change
+  // Load sessions from backend storage (source of truth)
   useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const docs = await api.listDocuments();
+        if (cancelled) return;
+        const nextSessions = (docs || []).map((d) => ({
+          id: d.document_id, // stable
+          documentId: d.document_id,
+          documentName: d.filename || d.document_id,
+          messages: [],
+          extractData: null,
+          createdAt: d.created_at,
+          meta: d,
+        }));
+        setSessions(nextSessions);
+        setActiveSessionId(nextSessions.length > 0 ? nextSessions[0].id : null);
+      } catch (e) {
+        console.error("Failed to load documents:", e);
+      }
     }
-  }, [sessions]);
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
 
-  const createSession = (documentId, documentName) => {
+  const createSession = (documentId, documentName, meta = null) => {
     const newSession = {
-      id: `session_${Date.now()}`,
+      id: documentId,
       documentId,
       documentName,
       messages: [],
       extractData: null,
-      createdAt: new Date().toISOString(),
+      createdAt: meta?.created_at || new Date().toISOString(),
+      meta,
     };
-    setSessions((prev) => [newSession, ...prev]);
+    setSessions((prev) => [newSession, ...prev.filter((s) => s.id !== documentId)]);
     setActiveSessionId(newSession.id);
     return newSession;
   };

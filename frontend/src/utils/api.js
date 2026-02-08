@@ -4,6 +4,20 @@ export const getDocumentUrl = (documentId) =>
   `${API_BASE}/documents/${documentId}/file`;
 
 export const api = {
+  async listDocuments() {
+    const response = await fetch(`${API_BASE}/documents`);
+    if (!response.ok) throw new Error("Failed to list documents");
+    return response.json();
+  },
+
+  async deleteDocument(documentId) {
+    const response = await fetch(`${API_BASE}/documents/${documentId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("Failed to delete document");
+    return response.json();
+  },
+
   async uploadDocument(file) {
     const formData = new FormData();
     formData.append("file", file);
