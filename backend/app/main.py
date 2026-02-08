@@ -56,6 +56,33 @@ def debug_retrieve(document_id: str, q: str, top_k: int = 6):
     - top_k: final top_k (default 6)
     """
 
+    doc_dir = Path(settings.storage_dir) / "docs" / document_id
+    index_path = doc_dir / "index.faiss"
+    meta_path = doc_dir / "chunks_meta.jsonl"
+
+    missing = []
+    if not doc_dir.exists():
+        missing.append("doc_dir")
+    if not index_path.exists():
+        missing.append("index.faiss")
+    if not meta_path.exists():
+        missing.append("chunks_meta.jsonl")
+
+    if missing:
+        return {
+            "document_id": document_id,
+            "question": q,
+            "top_k": top_k,
+            "pre_k": max(top_k * 3, 12),
+            "raw_top": [],
+            "reranked_top": [],
+            "error": {
+                "message": "Document is not fully ingested (missing FAISS index/metadata). Re-upload the file to rebuild embeddings/index.",
+                "missing": missing,
+                "doc_dir": str(doc_dir),
+            },
+        }
+
     pre_k = max(top_k * 3, 12)
     raw, _ = retrieve_raw(document_id, q, pre_k=pre_k)
     reranked = rerank_hybrid(q, raw, alpha=0.25)
