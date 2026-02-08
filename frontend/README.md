@@ -1,16 +1,55 @@
-# React + Vite
+# UltraDoc Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Lightweight reviewer UI for UltraDoc (upload a document, ask questions, view grounded answers + confidence, run structured extraction).
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+cd frontend
+npm install
 
-## React Compiler
+# Optional: point UI to a different backend
+# export VITE_API_URL=http://localhost:8000
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Open:
+- http://localhost:5173
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Configure backend URL
+
+The frontend reads:
+- `VITE_API_URL` (defaults to `http://localhost:8000`)
+
+Example:
+
+```bash
+VITE_API_URL=http://127.0.0.1:8000 npm run dev
+```
+
+## Features
+
+- **Upload**: sends multipart file to `POST /upload`
+- **Chat Q&A**: sends question to `POST /ask` and displays:
+  - answer
+  - sources (supporting text)
+  - confidence + breakdown (tooltip)
+- **Structured extraction**: calls `POST /extract` and renders dynamic fields
+- **PDF viewer**: loads `GET /documents/{document_id}/file`
+
+## Debug mode: retrieval inspection
+
+Append `?debug` to the frontend URL:
+- `http://localhost:5173/?debug`
+
+When enabled, after each question the UI will call:
+- `GET /debug/retrieve?document_id=...&q=...&top_k=6`
+
+and show:
+- **Raw (FAISS)** vs **Reranked (hybrid)** retrieval side-by-side.
+
+## Notes
+
+- Sessions/doc list are loaded from backend storage via `GET /documents`.
+- If backend storage is cleared, the UI will show no sessions (expected).
