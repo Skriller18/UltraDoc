@@ -37,7 +37,7 @@ async def upload(file: UploadFile = File(...)):
     with tmp_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    meta = ingest_document(file_path=str(tmp_path), filename=file.filename, mime=file.content_type)
+    meta = await ingest_document(file_path=str(tmp_path), filename=file.filename, mime=file.content_type)
     return meta
 
 
@@ -49,3 +49,33 @@ def ask(req: AskRequest):
 @app.post("/extract")
 def extract(req: ExtractRequest):
     return extract_structured(req.document_id)
+
+
+@app.get("/documents/{document_id}/file")
+def get_document_file(document_id: str):
+    """Serve the original uploaded document file."""
+    import json
+    from fastapi.responses import FileResponse
+    
+    doc_dir = Path(settings.storage_dir) / "docs" / document_id
+    meta_path = doc_dir / "meta.json"
+    
+    if not meta_path.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    with open(meta_path) as f:
+        meta = json.load(f)
+    
+    filename = meta.get("filename", "document")
+    file_path = doc_dir / filename
+    
+    if not file_path.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type=meta.get("mime", "application/octet-stream")
+    )

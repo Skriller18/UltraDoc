@@ -10,3 +10,4 @@ class Chunk:
     text: str
     page_num: int | None
     chunk_index: int
+    meta: dict | None = None

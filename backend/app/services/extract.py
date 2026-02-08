@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from openai import OpenAI
 
@@ -22,19 +23,81 @@ SHIPMENT_SCHEMA = {
     "carrier_name": None,
 }
 
+RATE_CONFIRMATION_SCHEMA = {
+    **SHIPMENT_SCHEMA,
+    "reference_id": None,
+    "po_number": None,
+    "container_id": None,
+    "booking_date": None,
+    "agreed_amount": None,
+}
+
+INVOICE_SCHEMA = {
+    "invoice_number": None,
+    "invoice_date": None,
+    "bill_to": None,
+    "remit_to": None,
+    "currency": None,
+    "subtotal": None,
+    "tax": None,
+    "total": None,
+    "due_date": None,
+}
+
+PACKING_LIST_SCHEMA = {
+    "packing_list_number": None,
+    "shipper": None,
+    "consignee": None,
+    "po_number": None,
+    "container_id": None,
+    "total_packages": None,
+    "total_weight": None,
+    "weight_unit": None,
+}
+
+SCHEMAS = {
+    "rate_confirmation": RATE_CONFIRMATION_SCHEMA,
+    "invoice": INVOICE_SCHEMA,
+    "packing_list": PACKING_LIST_SCHEMA,
+    # fallbacks
+    "bol": SHIPMENT_SCHEMA,
+    "manifest": SHIPMENT_SCHEMA,
+    "shipment_instructions": SHIPMENT_SCHEMA,
+}
+
+
+def _load_doc_meta(document_id: str) -> dict:
+    path = os.path.join(settings.storage_dir, "docs", document_id, "meta.json")
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _schema_for_doc_type(doc_type: str | None) -> dict:
+    if not doc_type:
+        return SHIPMENT_SCHEMA
+    return SCHEMAS.get(doc_type, SHIPMENT_SCHEMA)
+
 
 def extract_structured(document_id: str) -> dict:
+    doc_meta = _load_doc_meta(document_id)
+    doc_type = doc_meta.get("document_type")
+    schema = _schema_for_doc_type(doc_type)
+
     # Retrieve with a broad query to get likely relevant chunks.
-    query = (
-        "Extract shipment details: shipment id, shipper, consignee, pickup datetime, delivery datetime, "
-        "equipment type, mode, rate, currency, weight, carrier name"
-    )
-    sources, sims = retrieve(document_id, query, top_k=8)
+    field_list = ", ".join(schema.keys())
+    query = f"Extract the following fields: {field_list}"
+    sources, sims = retrieve(document_id, query, top_k=10)
 
     if not settings.openai_api_key:
         # Return empty schema with some helpful debug for reviewers.
         return {
-            **SHIPMENT_SCHEMA,
+            "_document_type": doc_type,
+            **{k: None for k in schema.keys()},
             "_note": "LLM not configured (set OPENAI_API_KEY). Returning nulls.",
             "_sources_preview": sources[:2],
         }
@@ -57,7 +120,7 @@ def extract_structured(document_id: str) -> dict:
 
     user = (
         "Fill this JSON schema using ONLY the sources.\n\n"
-        f"Schema:\n{json.dumps(SHIPMENT_SCHEMA, indent=2)}\n\n"
+        f"Schema:\n{json.dumps(schema, indent=2)}\n\n"
         f"Sources:\n{context}"
     )
 
@@ -78,5 +141,6 @@ def extract_structured(document_id: str) -> dict:
         data = {}
 
     # Enforce schema keys and nulls for missing
-    out = {k: data.get(k, None) for k in SHIPMENT_SCHEMA.keys()}
+    out = {k: data.get(k, None) for k in schema.keys()}
+    out["_document_type"] = doc_type
     return out

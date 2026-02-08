@@ -86,6 +86,7 @@ def query(document_id: str, query_embedding: list[float], *, top_k: int):
                 "chunk_index": m.get("chunk_index"),
                 "text": m.get("text"),
                 "chunk_id": m.get("id"),
+                "chunk_meta": m.get("meta"),
             }
         )
         rank += 1
