@@ -8,4 +8,12 @@ POC: upload a logistics document (PDF/DOCX/TXT), ask grounded questions over it 
 - `evaluation/` – evaluation scripts and metrics
 - `data/` – sample documents and extracted data
 
+## Backend architecture
+See `backend/README.md` for:
+- storage layout
+- chunking strategy
+- retrieval + hybrid ranking
+- confidence scoring
+- flowchart diagram
+
 ## Next
