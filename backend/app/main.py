@@ -37,7 +37,7 @@ async def upload(file: UploadFile = File(...)):
     with tmp_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    meta = await ingest_document(file_path=str(tmp_path), filename=file.filename, mime=file.content_type)
+    meta = ingest_document(file_path=str(tmp_path), filename=file.filename, mime=file.content_type)
     return meta
 
 
@@ -48,7 +48,7 @@ def ask(req: AskRequest):
 
 @app.post("/extract")
 def extract(req: ExtractRequest):
-    return extract_structured(req.document_id)
+    return extract_structured(req.document_id, force=req.force)
 
 
 @app.get("/documents/{document_id}/file")

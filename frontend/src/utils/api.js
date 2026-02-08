@@ -39,7 +39,7 @@ export const api = {
     return response.json();
   },
 
-  async extractData(documentId) {
+  async extractData(documentId, { force = false } = {}) {
     const response = await fetch(`${API_BASE}/extract`, {
       method: "POST",
       headers: {
@@ -47,6 +47,7 @@ export const api = {
       },
       body: JSON.stringify({
         document_id: documentId,
+        force,
       }),
     });
 

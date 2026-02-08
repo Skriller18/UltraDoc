@@ -38,6 +38,7 @@ export function useSessions() {
       documentId,
       documentName,
       messages: [],
+      extractData: null,
       createdAt: new Date().toISOString(),
     };
     setSessions((prev) => [newSession, ...prev]);
@@ -63,6 +64,17 @@ export function useSessions() {
     );
   };
 
+  const setSessionExtractData = (sessionId, extractData) => {
+    setSessions((prev) =>
+      prev.map((session) => {
+        if (session.id === sessionId) {
+          return { ...session, extractData };
+        }
+        return session;
+      }),
+    );
+  };
+
   const deleteSession = (sessionId) => {
     setSessions((prev) => {
       const filtered = prev.filter((s) => s.id !== sessionId);
@@ -82,6 +94,7 @@ export function useSessions() {
     createSession,
     switchSession,
     addMessage,
+    setSessionExtractData,
     deleteSession,
   };
 }

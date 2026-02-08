@@ -16,6 +16,7 @@ function App() {
     createSession,
     switchSession,
     addMessage,
+    setSessionExtractData,
   } = useSessions();
 
   const [isUploading, setIsUploading] = useState(false);
@@ -96,14 +97,23 @@ function App() {
 
   const handleExtract = async () => {
     if (!activeSession) return;
-    
+
     setShowExtract(true);
+
+    // Frontend cache: if we already have it in the session, just show it.
+    if (activeSession.extractData) {
+      setExtractData(activeSession.extractData);
+      setIsExtracting(false);
+      return;
+    }
+
     setIsExtracting(true);
     setExtractData(null);
 
     try {
       const data = await api.extractData(activeSession.documentId);
       setExtractData(data);
+      setSessionExtractData(activeSessionId, data);
     } catch (error) {
       console.error('Extraction failed:', error);
     } finally {

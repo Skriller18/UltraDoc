@@ -18,3 +18,4 @@ class AskResponse(BaseModel):
 
 class ExtractRequest(BaseModel):
     document_id: str
+    force: bool = False

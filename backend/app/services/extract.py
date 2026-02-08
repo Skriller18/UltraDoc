@@ -83,10 +83,29 @@ def _schema_for_doc_type(doc_type: str | None) -> dict:
     return SCHEMAS.get(doc_type, SHIPMENT_SCHEMA)
 
 
-def extract_structured(document_id: str) -> dict:
+def extract_structured(document_id: str, *, force: bool = False) -> dict:
     doc_meta = _load_doc_meta(document_id)
     doc_type = doc_meta.get("document_type")
     schema = _schema_for_doc_type(doc_type)
+
+    # Cache: if extraction already computed for this doc+schema, reuse.
+    doc_dir = os.path.join(settings.storage_dir, "docs", document_id)
+    cache_path = os.path.join(doc_dir, "extract.json")
+    schema_keys = list(schema.keys())
+
+    if not force and os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if (
+                isinstance(cached, dict)
+                and cached.get("_document_type") == doc_type
+                and cached.get("_schema_keys") == schema_keys
+            ):
+                cached["_cached"] = True
+                return cached
+        except Exception:
+            pass
 
     # Retrieve with a broad query to get likely relevant chunks.
     field_list = ", ".join(schema.keys())
@@ -95,12 +114,21 @@ def extract_structured(document_id: str) -> dict:
 
     if not settings.openai_api_key:
         # Return empty schema with some helpful debug for reviewers.
-        return {
+        out = {
             "_document_type": doc_type,
+            "_schema_keys": schema_keys,
+            "_cached": False,
             **{k: None for k in schema.keys()},
             "_note": "LLM not configured (set OPENAI_API_KEY). Returning nulls.",
             "_sources_preview": sources[:2],
         }
+        # Cache the null-structure too (so UI doesn't keep re-running)
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(out, f, indent=2)
+        except Exception:
+            pass
+        return out
 
     client = OpenAI(api_key=settings.openai_api_key)
 
@@ -143,4 +171,14 @@ def extract_structured(document_id: str) -> dict:
     # Enforce schema keys and nulls for missing
     out = {k: data.get(k, None) for k in schema.keys()}
     out["_document_type"] = doc_type
+    out["_schema_keys"] = schema_keys
+    out["_cached"] = False
+
+    # Persist extraction result for reuse
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(out, f, indent=2)
+    except Exception:
+        pass
+
     return out
