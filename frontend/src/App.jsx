@@ -159,6 +159,7 @@ function App() {
       <main className="main-content">
         <header className="header">
           <div className="header-left">
+            <img src="/ultaship.avif" alt="UltraShip" className="header-logo" />
             <h1 className="header-title">
               {activeSession ? activeSession.documentName : 'UltraDoc AI'}
             </h1>
