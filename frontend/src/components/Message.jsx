@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { SourceCard } from './SourceCard';
 
@@ -11,7 +13,15 @@ export function Message({ message }) {
         {isUser ? 'U' : 'AI'}
       </div>
       <div className="message-content">
-        <div className="message-text">{message.content}</div>
+        <div className="message-text">
+          {isUser ? (
+            message.content
+          ) : (
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content}
+            </ReactMarkdown>
+          )}
+        </div>
         
         {!isUser && message.confidence !== undefined && (
           <ConfidenceBadge 
