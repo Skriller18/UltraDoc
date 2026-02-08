@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pathlib
 
-import fitz  # PyMuPDF
 from docx import Document as DocxDocument
+
+from app.core.config import settings
 
 
 def extract_text_from_txt(path: str) -> list[tuple[int | None, str]]:
@@ -22,6 +23,40 @@ def extract_text_from_docx(path: str) -> list[tuple[int | None, str]]:
 
 
 def extract_text_from_pdf(path: str) -> list[tuple[int | None, str]]:
+    """PDF extraction via Datalab.
+
+    We intentionally prefer Datalab for PDFs because it handles OCR + layout better
+    than basic text extractors.
+
+    Notes:
+    - Datalab returns markdown/html/json; for now we use markdown and treat it as a
+      single text stream (page_num=None) unless we later add reliable page splitting.
+    """
+
+    if settings.datalab_api_key:
+        from datalab_sdk import ConvertOptions, DatalabClient
+
+        client = DatalabClient(api_key=settings.datalab_api_key)
+        options = ConvertOptions(
+            output_format=settings.datalab_output_format,
+            mode=settings.datalab_mode,
+            paginate=settings.datalab_paginate,
+        )
+        result = client.convert(path, options=options)
+
+        # Prefer markdown output (most RAG-friendly); fall back if configured otherwise.
+        if getattr(result, "markdown", None):
+            return [(None, result.markdown)]
+        if getattr(result, "html", None):
+            return [(None, result.html)]
+        if getattr(result, "json", None):
+            return [(None, str(result.json))]
+
+        raise ValueError("Datalab conversion returned no usable text")
+
+    # Optional fallback (kept so local dev isn't blocked if Datalab key isn't set)
+    import fitz  # PyMuPDF
+
     pages: list[tuple[int | None, str]] = []
     pdf = fitz.open(path)
     for i in range(pdf.page_count):
