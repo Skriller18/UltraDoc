@@ -39,9 +39,41 @@ export function ConfidenceBadge({ confidence, details }) {
           <div style={{ marginBottom: '4px' }}>
             <strong>Breakdown:</strong>
           </div>
-          <div>Top similarity: {(details.top1 * 100).toFixed(1)}%</div>
-          <div>Agreement: {(details.agreement * 100).toFixed(1)}%</div>
-          <div>Coverage: {(details.coverage * 100).toFixed(1)}%</div>
+          {(() => {
+            const topSimRaw = details.top1_raw ?? details.top1;
+            const topSimCal = details.top1_calibrated;
+            const agreement = details.agreement_rerank ?? details.agreement;
+            const agreementSim = details.agreement_similarity;
+            const coverage = details.coverage;
+            const kwTop1 = details.keyword_top1;
+            const kwBoost = details.keyword_boost;
+
+            const fmtPct = (v) => (typeof v === 'number' && Number.isFinite(v) ? (v * 100).toFixed(1) + '%' : '—');
+            const fmtNum = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(3) : '—');
+
+            return (
+              <>
+                <div>Top similarity (raw): {fmtPct(topSimRaw)}</div>
+                {topSimCal !== undefined && (
+                  <div>Top similarity (cal): {fmtPct(topSimCal)}</div>
+                )}
+                <div>Agreement (rerank): {fmtPct(agreement)}</div>
+                {agreementSim !== undefined && (
+                  <div>Agreement (similarity): {fmtPct(agreementSim)}</div>
+                )}
+                <div>Coverage (heur): {fmtPct(coverage)}</div>
+                {kwTop1 !== undefined && (
+                  <div>Keyword top1: {fmtPct(kwTop1)}</div>
+                )}
+                {kwBoost !== undefined && (
+                  <div>Keyword boost: {fmtNum(kwBoost)}</div>
+                )}
+                {details.floor_applied !== undefined && (
+                  <div>Floor applied: {details.floor_applied}</div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
