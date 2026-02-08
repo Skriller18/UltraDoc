@@ -11,7 +11,7 @@ from app.api.schemas import AskRequest, ExtractRequest
 from app.core.config import settings
 from app.services.extract import extract_structured
 from app.services.ingest import ingest_document
-from app.services.rag import answer_question
+from app.services.rag import answer_question, rerank_hybrid, retrieve_raw
 
 app = FastAPI(title="UltraDoc Backend", version="0.1.0")
 
@@ -44,6 +44,43 @@ async def upload(file: UploadFile = File(...)):
 @app.post("/ask")
 def ask(req: AskRequest):
     return answer_question(req.document_id, req.question)
+
+
+@app.get("/debug/retrieve")
+def debug_retrieve(document_id: str, q: str, top_k: int = 6):
+    """Debug endpoint: show raw FAISS retrieval vs hybrid reranked results.
+
+    Query params:
+    - document_id: uuid
+    - q: question
+    - top_k: final top_k (default 6)
+    """
+
+    pre_k = max(top_k * 3, 12)
+    raw, _ = retrieve_raw(document_id, q, pre_k=pre_k)
+    reranked = rerank_hybrid(q, raw, alpha=0.25)
+
+    def slim(s: dict) -> dict:
+        # Keep payload readable
+        return {
+            "rank": s.get("rank"),
+            "similarity": s.get("similarity"),
+            "keyword_score": s.get("keyword_score"),
+            "rerank_score": s.get("rerank_score"),
+            "page_num": s.get("page_num"),
+            "chunk_index": s.get("chunk_index"),
+            "chunk_id": s.get("chunk_id"),
+            "preview": (s.get("text") or "")[:240],
+        }
+
+    return {
+        "document_id": document_id,
+        "question": q,
+        "top_k": top_k,
+        "pre_k": pre_k,
+        "raw_top": [slim(x) for x in raw[:top_k]],
+        "reranked_top": [slim(x) for x in reranked[:top_k]],
+    }
 
 
 @app.post("/extract")

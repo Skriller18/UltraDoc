@@ -118,32 +118,41 @@ def _keyword_score(text: str, tokens: list[str]) -> float:
     return min(1.0, score / max(3.0, len(tokens)))
 
 
+def retrieve_raw(document_id: str, question: str, *, pre_k: int):
+    embedder = get_embedding_client()
+    q_emb = embedder.embed([question])[0]
+    sources = faiss_query(document_id, q_emb, top_k=pre_k)
+    for i, s in enumerate(sources, start=1):
+        s["rank"] = i
+    sims = [float(s["similarity"]) for s in sources]
+    return sources, sims
+
+
+def rerank_hybrid(question: str, sources: list[dict], *, alpha: float = 0.25) -> list[dict]:
+    tokens = _keyword_tokens(question)
+
+    out = []
+    for s in sources:
+        s2 = dict(s)
+        kw = _keyword_score(s2.get("text", ""), tokens)
+        s2["keyword_score"] = kw
+        s2["rerank_score"] = float(s2.get("similarity", 0.0)) + alpha * kw
+        out.append(s2)
+
+    out.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+    for i, s in enumerate(out, start=1):
+        s["rank"] = i
+    return out
+
+
 def retrieve(document_id: str, question: str, *, top_k: int | None = None):
     top_k = top_k or settings.top_k
     pre_k = max(top_k * 3, 12)
 
-    embedder = get_embedding_client()
-    q_emb = embedder.embed([question])[0]
+    raw_sources, _ = retrieve_raw(document_id, question, pre_k=pre_k)
+    reranked = rerank_hybrid(question, raw_sources, alpha=0.25)
 
-    # Vector candidates
-    sources = faiss_query(document_id, q_emb, top_k=pre_k)
-
-    # Hybrid rerank: vector similarity + keyword boost
-    tokens = _keyword_tokens(question)
-    alpha = 0.25  # keyword weight
-
-    for s in sources:
-        kw = _keyword_score(s.get("text", ""), tokens)
-        s["keyword_score"] = kw
-        s["rerank_score"] = float(s.get("similarity", 0.0)) + alpha * kw
-
-    sources.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
-
-    # Reassign ranks after rerank
-    for i, s in enumerate(sources, start=1):
-        s["rank"] = i
-
-    final = sources[:top_k]
+    final = reranked[:top_k]
     sims = [float(s["similarity"]) for s in final]
     return final, sims
 
