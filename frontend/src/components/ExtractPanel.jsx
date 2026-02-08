@@ -12,6 +12,29 @@ const FIELD_LABELS = {
   currency: 'Currency',
   weight: 'Weight',
   carrier_name: 'Carrier Name',
+  reference_id: 'Reference ID',
+  load_id: 'Load ID',
+  po_number: 'PO Number',
+  container_id: 'Container ID',
+  booking_date: 'Booking Date',
+  agreed_amount: 'Agreed Amount',
+  dispatcher_name: 'Dispatcher Name',
+  dispatcher_phone: 'Dispatcher Phone',
+  dispatcher_email: 'Dispatcher Email',
+
+  invoice_number: 'Invoice Number',
+  invoice_date: 'Invoice Date',
+  bill_to: 'Bill To',
+  remit_to: 'Remit To',
+  subtotal: 'Subtotal',
+  tax: 'Tax',
+  total: 'Total',
+  due_date: 'Due Date',
+
+  packing_list_number: 'Packing List Number',
+  total_packages: 'Total Packages',
+  total_weight: 'Total Weight',
+  weight_unit: 'Weight Unit',
 };
 
 export function ExtractPanel({ data, onClose, isLoading }) {

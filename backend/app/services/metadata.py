@@ -26,10 +26,14 @@ def extract_global_identifiers(text: str) -> dict:
 
     out: dict = {}
 
-    # Reference / shipment id patterns
+    # Reference / load / shipment id patterns
     m = re.search(r"\bReference\s*ID\s*[:#-]?\s*([A-Z0-9-]{4,})\b", t, re.IGNORECASE)
     if m:
         out["reference_id"] = m.group(1)
+
+    m = re.search(r"\bLoad\s*ID\s*[:#-]?\s*([A-Z0-9-]{4,})\b", t, re.IGNORECASE)
+    if m:
+        out["load_id"] = m.group(1)
 
     m = re.search(r"\bShipment\s*(ID|#)\s*[:#-]?\s*([A-Z0-9-]{4,})\b", t, re.IGNORECASE)
     if m:
@@ -46,6 +50,28 @@ def extract_global_identifiers(text: str) -> dict:
     m = re.search(r"\bContainer\s*(ID|No\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{6,})\b", t, re.IGNORECASE)
     if m:
         out["container_id"] = m.group(2)
+
+    # Dispatcher details (common on rate confirmations)
+    # Do line-based matching so we don't accidentally capture "Dispatcher Email" as a name.
+    for line in t.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        m = re.match(r"^(Dispatcher|Dispatcher Name)\s*[:#-]\s*(.+)$", line, re.IGNORECASE)
+        if m and "dispatcher_name" not in out:
+            out["dispatcher_name"] = m.group(2).strip()
+            continue
+
+        m = re.match(r"^Dispatcher\s*(Phone|Tel|Telephone)\s*[:#-]\s*(.+)$", line, re.IGNORECASE)
+        if m and "dispatcher_phone" not in out:
+            out["dispatcher_phone"] = m.group(2).strip()
+            continue
+
+        m = re.match(r"^Dispatcher\s*(Email)\s*[:#-]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})$", line, re.IGNORECASE)
+        if m and "dispatcher_email" not in out:
+            out["dispatcher_email"] = m.group(2).strip()
+            continue
 
     # Carrier MC
     m = re.search(r"\bMC\s*#?\s*([0-9]{5,10})\b", t, re.IGNORECASE)
@@ -78,10 +104,14 @@ def build_metadata_prefix(meta: dict) -> str:
     for k in [
         "document_type",
         "reference_id",
+        "load_id",
         "shipment_id",
         "bol_number",
         "po_number",
         "container_id",
+        "dispatcher_name",
+        "dispatcher_phone",
+        "dispatcher_email",
         "carrier_mc",
         "booking_date",
         "issue_date",

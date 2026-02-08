@@ -26,10 +26,14 @@ SHIPMENT_SCHEMA = {
 RATE_CONFIRMATION_SCHEMA = {
     **SHIPMENT_SCHEMA,
     "reference_id": None,
+    "load_id": None,
     "po_number": None,
     "container_id": None,
     "booking_date": None,
     "agreed_amount": None,
+    "dispatcher_name": None,
+    "dispatcher_phone": None,
+    "dispatcher_email": None,
 }
 
 INVOICE_SCHEMA = {
