@@ -33,32 +33,51 @@ def _calibrate_similarity(sim: float) -> float:
     return min(0.98, 0.92 + (sim - 0.60) / 0.40 * 0.06)
 
 
-def _confidence_from_similarities(sims: list[float]) -> dict:
-    if not sims:
+def _agreement_from_scores(scores: list[float]) -> float:
+    if len(scores) < 2:
+        return 0.0
+    mean = sum(scores) / len(scores)
+    var = sum((x - mean) ** 2 for x in scores) / len(scores)
+    return max(0.0, 1.0 - math.sqrt(var) * 3)
+
+
+def _confidence_from_sources(sources: list[dict]) -> dict:
+    if not sources:
         return {"confidence": 0.0, "details": {"reason": "no_retrieval"}}
 
-    raw_top1 = float(sims[0])
-    top1 = _calibrate_similarity(raw_top1)
+    raw_top1 = float(sources[0].get("similarity") or 0.0)
+    top1_cal = _calibrate_similarity(raw_top1)
 
-    top3 = sims[:3]
-    agreement = 0.0
-    if len(top3) >= 2:
-        mean = sum(top3) / len(top3)
-        var = sum((x - mean) ** 2 for x in top3) / len(top3)
-        agreement = max(0.0, 1.0 - math.sqrt(var) * 3)
+    # Option A: agreement based on the *final ranking score* (rerank_score), not raw similarity.
+    rr_scores = [float(s.get("rerank_score") or 0.0) for s in sources[:3]]
+    agreement_rerank = _agreement_from_scores(rr_scores)
+
+    # Also keep similarity agreement for debugging.
+    sim_scores = [float(s.get("similarity") or 0.0) for s in sources[:3]]
+    agreement_similarity = _agreement_from_scores(sim_scores)
+
+    # Option B: keyword-based boost (IDs/PO/Load/MC/email etc.).
+    kw_top1 = float(sources[0].get("keyword_score") or 0.0)
+    # up to +0.12 boost when kw_top1 is strong
+    kw_boost = min(0.12, 0.12 * kw_top1)
 
     # Still a placeholder; later we can score answer support/quotes.
-    coverage = 0.65 if raw_top1 >= 0.45 else (0.45 if raw_top1 >= 0.35 else 0.30)
+    coverage = 0.70 if raw_top1 >= 0.45 else (0.55 if raw_top1 >= 0.35 else 0.35)
 
-    conf = 0.65 * top1 + 0.20 * agreement + 0.15 * coverage
+    base = 0.62 * top1_cal + 0.23 * agreement_rerank + 0.15 * coverage
+    conf = base + kw_boost
     conf = float(max(0.0, min(1.0, conf)))
+
     return {
         "confidence": conf,
         "details": {
             "top1_raw": raw_top1,
-            "top1_calibrated": top1,
-            "agreement": agreement,
+            "top1_calibrated": top1_cal,
+            "agreement_rerank": agreement_rerank,
+            "agreement_similarity": agreement_similarity,
             "coverage": coverage,
+            "keyword_top1": kw_top1,
+            "keyword_boost": kw_boost,
         },
     }
 
@@ -161,7 +180,7 @@ def answer_question(document_id: str, question: str) -> dict:
     sources, sims = retrieve(document_id, question)
 
     if not sources or sims[0] < settings.min_similarity:
-        conf = _confidence_from_similarities(sims)
+        conf = _confidence_from_sources(sources)
         return {
             "answer": "Not found in document.",
             "sources": sources[:2],
@@ -176,7 +195,7 @@ def answer_question(document_id: str, question: str) -> dict:
         }
 
     if not settings.openai_api_key:
-        conf = _confidence_from_similarities(sims)
+        conf = _confidence_from_sources(sources)
         return {
             "answer": "LLM not configured (set OPENAI_API_KEY). Top matching text is returned as source.",
             "sources": sources[:3],
@@ -220,7 +239,15 @@ def answer_question(document_id: str, question: str) -> dict:
     if answer.lower() != "not found in document." and sims[0] < settings.min_similarity:
         answer = "Not found in document."
 
-    conf = _confidence_from_similarities(sims)
+    conf = _confidence_from_sources(sources)
+
+    # Optional floor when we passed guardrails and produced an answer.
+    if answer.lower() != "not found in document." and sources and sims and sims[0] >= settings.min_similarity:
+        conf_val = max(conf["confidence"], 0.55)
+        if conf_val != conf["confidence"]:
+            conf["details"]["floor_applied"] = 0.55
+            conf["confidence"] = conf_val
+
     return {
         "answer": answer,
         "sources": sources[:3],
