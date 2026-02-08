@@ -27,6 +27,131 @@ Embeddings + LLM: OpenAI (configurable)
 Vector index: FAISS (per-document)
 ```
 
+## Dataflow diagrams
+
+### Upload / ingest flow (`POST /upload`)
+
+```mermaid
+flowchart TD
+  UI[Frontend Upload] -->|multipart file| API_UPLOAD[/POST /upload\napp/main.py/]
+  API_UPLOAD --> SAVE_TMP[Save temp file\nstorage/uploads/<filename>]
+  SAVE_TMP --> INGEST[ingest_document\napp/services/ingest.py]
+
+  INGEST --> COPY_DOC[Copy to storage/docs/<doc_id>/]
+  COPY_DOC --> EXTRACT[extract_text\napp/services/text_extract.py]
+  EXTRACT -->|pages[]| META_SCAN[detect_document_type + extract_global_identifiers\napp/services/metadata.py]
+  META_SCAN --> PREFIX[build_metadata_prefix\n(meta injected into every chunk)]
+
+  EXTRACT --> CHUNK[chunk_pages\napp/services/chunking.py]
+  CHUNK --> MD_PARSE[parse_markdown_blocks (if markdown)\napp/services/parsing/markdown_blocks.py]
+  CHUNK --> EMBED[embed chunks\napp/services/embeddings.py]
+  PREFIX --> EMBED
+
+  EMBED --> FAISS_PERSIST[persist FAISS index\napp/services/faiss_store.py]
+  FAISS_PERSIST --> DISK[(index.faiss + chunks_meta.jsonl)]
+  INGEST --> META_JSON[(meta.json)]
+
+  META_JSON --> API_UPLOAD
+  DISK --> API_UPLOAD
+  API_UPLOAD --> UI
+```
+
+### Ask/Q&A flow (`POST /ask`)
+
+```mermaid
+flowchart TD
+  UI[Frontend Question] --> API_ASK[/POST /ask\napp/main.py/]
+  API_ASK --> RAG[answer_question\napp/services/rag.py]
+  RAG --> Q_EMBED[embed question\napp/services/embeddings.py]
+  Q_EMBED --> VEC[FAISS query (pre_k)\napp/services/faiss_store.py]
+  VEC --> HYBRID[Hybrid rerank\nvector sim + keyword_score\n(app/services/rag.py)]
+  HYBRID --> TOPK[Top-k sources]
+
+  TOPK --> GUARD{Guardrail:\nmin_similarity?}
+  GUARD -- no --> NOTFOUND[Return "Not found in document"\n+ sources + guardrail]
+
+  GUARD -- yes --> LLM{OPENAI_API_KEY set?}
+  LLM -- no --> NO_LLM[Return sources + message]
+  LLM -- yes --> GEN[LLM answer from sources\nOpenAI chat.completions]
+
+  GEN --> CONF[Confidence scoring\n(calibrated similarity + agreement)]
+  NOTFOUND --> CONF
+  NO_LLM --> CONF
+  CONF --> API_ASK
+  API_ASK --> UI
+```
+
+### Extract flow (`POST /extract`)
+
+```mermaid
+flowchart TD
+  UI[Frontend Extract] --> API_EX[/POST /extract\napp/main.py/]
+  API_EX --> EXTRACTOR[extract_structured\napp/services/extract.py]
+  EXTRACTOR --> CACHE{extract.json exists\nand schema matches?}
+  CACHE -- yes --> RETURN_CACHED[Return cached JSON\n_cached=true]
+  CACHE -- no --> SCHEMA[Pick schema by document_type\n(app/services/extract.py)]
+  SCHEMA --> RETRIEVE[retrieve supporting chunks\n(app/services/rag.py)]
+  RETRIEVE --> LLM{OPENAI_API_KEY set?}
+  LLM -- no --> NULLS[Return nulls + note\n(cache it)]
+  LLM -- yes --> LLM_JSON[LLM fills schema\nSTRICT JSON]
+  LLM_JSON --> SAVE_CACHE[Write extract.json\n_cached=false]
+  NULLS --> SAVE_CACHE
+  SAVE_CACHE --> API_EX
+  RETURN_CACHED --> API_EX
+  API_EX --> UI
+```
+
+### File-by-file data movement map
+
+**API + routing**
+- `app/main.py`
+  - owns HTTP endpoints; passes request payloads into services; returns JSON to UI.
+
+**Configuration + shared types**
+- `app/core/config.py` → loads env vars (OpenAI, Datalab, thresholds)
+- `app/core/types.py` → `Chunk` dataclass (chunk text + page + optional meta)
+
+**Ingestion pipeline**
+- `app/services/text_extract.py`
+  - input: file path + mime
+  - output: `pages[]` (page_num, text)
+- `app/services/parsing/markdown_blocks.py`
+  - input: Markdown string
+  - output: block list (heading/table/kvs/text)
+- `app/services/chunking.py`
+  - input: `pages[]`
+  - output: `chunks[]`
+- `app/services/metadata.py`
+  - input: full document text
+  - output: global metadata + injected prefix (prepended to chunk text)
+- `app/services/embeddings.py`
+  - input: list of chunk texts (with injected metadata)
+  - output: list of embedding vectors
+- `app/services/faiss_store.py`
+  - input: chunks + embeddings
+  - output: `index.faiss` + `chunks_meta.jsonl`
+- `app/services/ingest.py`
+  - orchestrates all steps above and writes `meta.json`
+
+**RAG Q&A**
+- `app/services/rag.py`
+  - embeds question
+  - FAISS retrieve (pre_k)
+  - hybrid rerank (keyword boost)
+  - guardrail decision
+  - calls OpenAI to answer from sources
+  - computes confidence + returns sources
+
+**Extraction**
+- `app/services/extract.py`
+  - chooses schema by doc type
+  - retrieves context
+  - LLM fills schema (strict JSON)
+  - caches output to `extract.json`
+
+Notes:
+- The **frontend** renders returned `answer`, `sources`, and `confidence` from `/ask`, and renders extracted key/values from `/extract`.
+
 ## Run locally
 
 ```bash
