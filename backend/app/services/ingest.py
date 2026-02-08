@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.services.chunking import chunk_pages
 from app.services.embeddings import get_embedding_client
 from app.services.text_extract import extract_text
-from app.services.vectorstore_local import persist_chunks
+from app.services.faiss_store import persist
 
 
 def _ensure_dirs():
@@ -38,8 +38,8 @@ def ingest_document(*, file_path: str, filename: str, mime: str | None) -> dict:
     embedder = get_embedding_client()
     embeddings = embedder.embed([c.text for c in chunks])
 
-    # Local vector store: persist chunks + embeddings per document.
-    persist_chunks(document_id, chunks=chunks, embeddings=embeddings)
+    # FAISS per-document index + chunk metadata.
+    persist(document_id, chunks=chunks, embeddings=embeddings)
 
     meta = {
         "document_id": document_id,

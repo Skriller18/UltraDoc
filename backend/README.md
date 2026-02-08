@@ -26,8 +26,9 @@ Open:
 
 ## Storage
 - `storage/docs/<document_id>/meta.json`
-- `storage/docs/<document_id>/chunks.jsonl` (chunk text + embedding)
+- `storage/docs/<document_id>/index.faiss` (FAISS index; cosine via inner-product on normalized vectors)
+- `storage/docs/<document_id>/chunks_meta.jsonl` (chunk text + metadata in index order)
 
 ## Notes
-- Vector search is implemented locally (cosine similarity over stored embeddings). This is enough for POC + small docs.
+- Retrieval uses **FAISS** per document (IndexFlatIP). Good for POC; can swap to IVF/HNSW later.
 - If `OPENAI_API_KEY` is not set, `/ask` returns guardrailed “LLM not configured…” and `/extract` returns nulls.

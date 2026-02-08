@@ -6,7 +6,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.services.embeddings import get_embedding_client
-from app.services.vectorstore_local import query as local_query
+from app.services.faiss_store import query as faiss_query
 
 
 def _confidence_from_similarities(sims: list[float]) -> dict:
@@ -38,7 +38,7 @@ def retrieve(document_id: str, question: str, *, top_k: int | None = None):
     embedder = get_embedding_client()
     q_emb = embedder.embed([question])[0]
 
-    sources = local_query(document_id, q_emb, top_k=top_k)
+    sources = faiss_query(document_id, q_emb, top_k=top_k)
     sims = [float(s["similarity"]) for s in sources]
     return sources, sims
 
