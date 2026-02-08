@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def get_default_storage_dir() -> str:
+    """Use /tmp for serverless (Vercel/Lambda), otherwise local storage."""
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return "/tmp/storage"
+    return "storage"
 
 
 class Settings(BaseSettings):
@@ -17,7 +25,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
 
-    storage_dir: str = "storage"
+    storage_dir: str = get_default_storage_dir()
 
     min_similarity: float = 0.35
     top_k: int = 6
